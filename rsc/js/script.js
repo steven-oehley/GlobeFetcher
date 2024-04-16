@@ -4,11 +4,10 @@ const btn = document.querySelector('.btn-country');
 const countriesContainer = document.querySelector('.countries');
 
 ///////////////////////////////////////
-// helper function
+// Helper Functions
+
 function getJSON(url, errorMessage) {
-  fetch(`${url}`).then(response => {
-    console.log(response);
-    // can reject manually if response not ok
+  return fetch(url).then(response => {
     if (!response.ok) {
       throw new Error(`${errorMessage}: ${response.status}`);
     }
@@ -16,52 +15,73 @@ function getJSON(url, errorMessage) {
   });
 }
 
+function getCountryDataByCoordinates(latitude, longitude) {
+  const geocodeUrl = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`;
+
+  return getJSON(geocodeUrl, 'Country Not Found').then(data => {
+    const countryName = data.countryName;
+    return getCountryData(countryName);
+  });
+}
+
 function getCountryData(country) {
-  getJSON(
-    `https://countries-api-836d.onrender.com/countries/name/${country}`,
-    'Country Not Found'
-  )
+  const countryInfoUrl = `https://countries-api-836d.onrender.com/countries/name/${country}`;
+
+  return getJSON(countryInfoUrl, 'Country Not Found')
     .then(data => {
       renderCountry(data[0]);
-      // get neighbouring country
-      const firstNeighbour = data[0].borders?.[0]; // optional chaining to account for no bordering countries (islands for example)
-      if (!firstNeighbour) throw new Error('No neighbour found!');
-      return getJSON(
-        `https://countries-api-836d.onrender.com/countries/alpha/${firstNeighbour}`,
-        'Country Not Found'
-      );
+      const firstNeighbour = data[0].borders?.[0];
+      if (firstNeighbour) {
+        return getJSON(
+          `https://countries-api-836d.onrender.com/countries/alpha/${firstNeighbour}`,
+          'Country Not Found'
+        ).then(neighbourData => renderCountry(neighbourData, 'neighbour'));
+      }
     })
-
-    .then(data => renderCountry(data, 'neighbour')) // if promise fufilled
-    .catch(err => renderError(`Something went wrong! 😢 ${err.message}`)) // global catch for errors (like no internet, wont tell you if no data, need to do manually)
-    .finally(() => (countriesContainer.style.opacity = 1)); // always called
+    .catch(err => renderError(`Something went wrong! 😢 ${err.message}`))
+    .finally(() => (countriesContainer.style.opacity = 1));
 }
 
 function renderCountry(data, className = '') {
   const toRender = `
-        <article class="country ${className}">
-          <img class="country__img" src="${data.flag}" />
-          <div class="country__data">
-            <h3 class="country__name">${data.name}</h3>
-            <h4 class="country__region">${data.region}</h4>
-            <p class="country__row"><span>👫</span>${(
-              +data.population / 1000000
-            ).toFixed(1)} million people</p>
-            <p class="country__row"><span>🗣️</span>${data.languages[0].name}</p>
-            <p class="country__row"><span>💰</span>${
-              data.currencies[0].name
-            }</p>
-          </div>
-        </article>`;
+    <article class="country ${className}">
+      <img class="country__img" src="${data.flag}" />
+      <div class="country__data">
+        <h3 class="country__name">${data.name}</h3>
+        <h4 class="country__region">${data.region}</h4>
+        <p class="country__row"><span>👫</span>${(
+          +data.population / 1000000
+        ).toFixed(1)} million people</p>
+        <p class="country__row"><span>🗣️</span>${data.languages[0].name}</p>
+        <p class="country__row"><span>💰</span>${data.currencies[0].name}</p>
+      </div>
+    </article>`;
 
   countriesContainer.insertAdjacentHTML('beforeend', toRender);
 }
 
 function renderError(message) {
-  countriesContainer.insertAdjacentText('beforeend', message);
+  countriesContainer.insertAdjacentHTML('beforeend', `<p>${message}</p>`);
 }
 
-btn.addEventListener('click', () => getCountryData('south africa'));
+///////////////////////////////////////
+// Event Listener
+
+btn.addEventListener('click', () => {
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      position => {
+        const { latitude, longitude } = position.coords;
+        getCountryDataByCoordinates(latitude, longitude);
+      },
+      error => {
+        renderError(`Geolocation Error: ${error.message}`);
+      }
+    );
+  } else {
+    renderError('Geolocation is not supported by your browser');
+  }
+});
 
 // building a promise instead of just consuming
 /* const lotteryPromise = new Promise((resolve, reject) => {
