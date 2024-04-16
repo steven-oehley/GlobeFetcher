@@ -4,23 +4,37 @@ const btn = document.querySelector('.btn-country');
 const countriesContainer = document.querySelector('.countries');
 
 ///////////////////////////////////////
-
-/*         <article class="country">
-          <img class="country__img" src="" />
-          <div class="country__data">
-            <h3 class="country__name">COUNTRY</h3>
-            <h4 class="country__region">REGION</h4>
-            <p class="country__row"><span>👫</span>POP people</p>
-            <p class="country__row"><span>🗣️</span>LANG</p>
-            <p class="country__row"><span>💰</span>CUR</p>
-          </div>
-        </article> */
-const name = 'south africa';
+// helper function
+function getJSON(url, errorMessage) {
+  fetch(`${url}`).then(response => {
+    console.log(response);
+    // can reject manually if response not ok
+    if (!response.ok) {
+      throw new Error(`${errorMessage}: ${response.status}`);
+    }
+    return response.json();
+  });
+}
 
 function getCountryData(country) {
-  fetch(`https://countries-api-836d.onrender.com/countries/name/${country}`)
-    .then(response => response.json())
-    .then(data => renderCountry(data[0])); // if promise fufilled
+  getJSON(
+    `https://countries-api-836d.onrender.com/countries/name/${country}`,
+    'Country Not Found'
+  )
+    .then(data => {
+      renderCountry(data[0]);
+      // get neighbouring country
+      const firstNeighbour = data[0].borders?.[0]; // optional chaining to account for no bordering countries (islands for example)
+      if (!firstNeighbour) throw new Error('No neighbour found!');
+      return getJSON(
+        `https://countries-api-836d.onrender.com/countries/alpha/${firstNeighbour}`,
+        'Country Not Found'
+      );
+    })
+
+    .then(data => renderCountry(data, 'neighbour')) // if promise fufilled
+    .catch(err => renderError(`Something went wrong! 😢 ${err.message}`)) // global catch for errors (like no internet, wont tell you if no data, need to do manually)
+    .finally(() => (countriesContainer.style.opacity = 1)); // always called
 }
 
 function renderCountry(data, className = '') {
@@ -41,7 +55,21 @@ function renderCountry(data, className = '') {
         </article>`;
 
   countriesContainer.insertAdjacentHTML('beforeend', toRender);
-  countriesContainer.style.opacity = 1;
 }
 
-getCountryData('south africa');
+function renderError(message) {
+  countriesContainer.insertAdjacentText('beforeend', message);
+}
+
+btn.addEventListener('click', () => getCountryData('south africa'));
+
+// building a promise instead of just consuming
+/* const lotteryPromise = new Promise((resolve, reject) => {
+  if (Math.random() >= 0.5) {
+    resolve('You WIN'); // promise is fulfilled / resolved
+  } else {
+    reject('You lost!');
+  }
+}); // special kind of object
+
+lotteryPromise.then(res => console.log(res)).catch(err => console.log(err)); */
